@@ -8,6 +8,7 @@ import {
   type TextareaHTMLAttributes,
 } from 'react'
 import { useT } from '../lib/i18n'
+import { nameSlot, seriesColor, tint } from '../lib/colors'
 
 export const cn = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ')
 
@@ -28,7 +29,7 @@ export function Button({ variant = 'primary', size = 'md', className, type = 'bu
     <button
       type={type}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-xl font-medium whitespace-nowrap transition disabled:opacity-50 disabled:pointer-events-none',
+        'inline-flex items-center justify-center gap-2 rounded-xl font-medium whitespace-nowrap transition active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none',
         v,
         s,
         className,
@@ -107,8 +108,8 @@ export function Sheet({
 
   return (
     <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg max-h-[92dvh] flex flex-col bg-surface rounded-t-3xl sm:rounded-3xl shadow-xl">
+      <div className="absolute inset-0 bg-black/40 animate-fade-in" onClick={onClose} />
+      <div className="relative w-full sm:max-w-lg max-h-[92dvh] flex flex-col bg-surface rounded-t-3xl sm:rounded-3xl shadow-xl animate-slide-up sm:animate-pop">
         <div className="flex items-center justify-between pl-4 pr-2 h-14 border-b border-line shrink-0">
           <h2 className="font-semibold truncate">{title}</h2>
           <button type="button" onClick={onClose} className="h-10 w-10 grid place-items-center rounded-full hover:bg-surface-2" aria-label="Close">
@@ -190,12 +191,45 @@ export function Spinner({ full }: { full?: boolean }) {
   )
 }
 
-export function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+/** Tinted stat tile; `slot` picks one of the 8 categorical colours, `icon` sits in a matching circle. */
+export function StatTile({ label, value, sub, slot = 1, icon }: { label: string; value: string; sub?: string; slot?: number; icon?: ReactNode }) {
   return (
-    <div className="rounded-2xl bg-surface border border-line p-3 min-w-0">
+    <div className="rounded-2xl border border-line p-3 min-w-0" style={{ background: tint(slot, 14) }}>
+      {icon && (
+        <div className="h-8 w-8 rounded-full grid place-items-center mb-2 text-white" style={{ background: seriesColor(slot) }}>
+          {icon}
+        </div>
+      )}
       <div className="text-xs text-ink-2 truncate">{label}</div>
       <div className="text-lg font-semibold mt-0.5 truncate">{value}</div>
       {sub && <div className="text-xs text-muted mt-0.5 truncate">{sub}</div>}
+    </div>
+  )
+}
+
+/** Initial-letter avatar with a colour that is stable for the name. */
+export function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' | 'lg' }) {
+  const slot = nameSlot(name)
+  const dim = { sm: 'h-8 w-8 text-sm', md: 'h-10 w-10', lg: 'h-14 w-14 text-xl' }[size]
+  return (
+    <div
+      className={cn(dim, 'rounded-full grid place-items-center font-semibold shrink-0')}
+      style={{ background: tint(slot, 26), boxShadow: `inset 0 0 0 2px ${seriesColor(slot)}`, color: 'var(--ink)' }}
+      aria-hidden
+    >
+      {name.trim()[0]?.toUpperCase()}
+    </div>
+  )
+}
+
+/** Small coloured circle holding a category icon. */
+export function IconChip({ slot, children, size = 'md' }: { slot: number; children: ReactNode; size?: 'sm' | 'md' }) {
+  return (
+    <div
+      className={cn(size === 'sm' ? 'h-8 w-8' : 'h-10 w-10', 'rounded-xl grid place-items-center shrink-0')}
+      style={{ background: tint(slot, 18), color: seriesColor(slot) }}
+    >
+      {children}
     </div>
   )
 }
@@ -221,7 +255,7 @@ export function LangToggle() {
     <button
       type="button"
       onClick={() => setLang(lang === 'en' ? 'ta' : 'en')}
-      className="h-8 px-3 rounded-full border border-line bg-surface text-sm font-medium"
+      className="h-8 px-3 rounded-full border border-line bg-surface text-ink text-sm font-medium shadow-sm"
       aria-label="Switch language"
     >
       {lang === 'en' ? 'தமிழ்' : 'English'}

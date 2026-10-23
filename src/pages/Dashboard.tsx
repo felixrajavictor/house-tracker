@@ -1,14 +1,19 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, HardHat, Package, Receipt, Wallet } from 'lucide-react'
 import { localName, useT } from '../lib/i18n'
 import { useData } from '../lib/data'
 import { useUi } from '../lib/uiContext'
 import { computeStats } from '../lib/stats'
 import { fmtCompact, fmtDateShort, fmtINR, fmtMonth } from '../lib/format'
-import { Badge, Card, Empty, SectionTitle, StatTile } from '../components/ui'
-import { BarList, Meter, MonthlyColumns, type ColumnDatum } from '../components/charts'
+import { categorySlot, seriesColor } from '../lib/colors'
+import { Avatar, Badge, Card, Empty, IconChip, SectionTitle, StatTile } from '../components/ui'
+import { BarList, Meter, MonthlyColumns, type BarItem, type ColumnDatum } from '../components/charts'
+import { CountUp } from '../components/CountUp'
 import type { StageStatus } from '../lib/types'
+
+const statusTone: Record<StageStatus, 'neutral' | 'warning' | 'good'> = { pending: 'neutral', ongoing: 'warning', done: 'good' }
+const statusDot: Record<StageStatus, string> = { pending: 'var(--muted)', ongoing: 'var(--warning)', done: 'var(--good)' }
 
 export default function Dashboard() {
   const { t, lang } = useT()
@@ -33,29 +38,31 @@ export default function Dashboard() {
     return out
   }, [s])
 
-  const catItems = useMemo(() => {
+  const catItems = useMemo<BarItem[]>(() => {
     const arr = [...s.byCategory.entries()]
       .map(([k, value]) => {
         const c = k === 'wages' || k === 'none' ? undefined : d.categoryById.get(Number(k))
         const label = k === 'wages' ? t('dailyWages') : c ? localName(c, lang) : t('others')
-        return { label, value }
+        const slot = k === 'wages' ? 2 : categorySlot(c)
+        return { label, value, slot }
       })
       .filter((i) => i.value > 0)
       .sort((a, b) => b.value - a.value)
     if (arr.length <= 8) return arr
     const rest = arr.slice(7).reduce((a, i) => a + i.value, 0)
-    return [...arr.slice(0, 7), { label: t('others'), value: rest }]
+    return [...arr.slice(0, 7), { label: t('others'), value: rest, slot: 8 }]
   }, [s, d.categoryById, lang, t])
 
   const stageItems = d.stages.map((st) => ({ st, cost: s.byStage.get(st.id) ?? 0 })).filter((x) => x.cost > 0 || x.st.status !== 'pending')
   const untagged = s.byStage.get(0) ?? 0
+  const doneCount = d.stages.filter((st) => st.status === 'done').length
 
   const memberItems = [...s.byMember.entries()]
     .map(([id, value]) => ({ id, name: d.profileById.get(id)?.name ?? '—', value }))
     .sort((a, b) => b.value - a.value)
 
   const recent = useMemo(() => {
-    type Item = { id: string; date: string; created: string; title: string; sub: string; amount: number; onClick: () => void }
+    type Item = { id: string; date: string; created: string; title: string; sub: string; amount: number; slot: number; kind: 'expense' | 'worker'; name: string; onClick: () => void }
     const items: Item[] = []
     for (const e of d.expenses.slice(0, 10)) {
       const c = e.category_id != null ? d.categoryById.get(e.category_id) : undefined
@@ -67,6 +74,9 @@ export default function Dashboard() {
         title: e.description || (c ? localName(c, lang) : t('others')),
         sub: [c && e.description ? localName(c, lang) : null, sup?.name].filter(Boolean).join(' · '),
         amount: e.amount,
+        slot: categorySlot(c),
+        kind: 'expense',
+        name: '',
         onClick: () => openExpense(e),
       })
     }
@@ -79,6 +89,9 @@ export default function Dashboard() {
         title: w?.name ?? '—',
         sub: p.kind === 'advance' ? t('advance') : t('wage'),
         amount: p.amount,
+        slot: 2,
+        kind: 'worker',
+        name: w?.name ?? '?',
         onClick: () => nav(`/workers/${p.worker_id}`),
       })
     }
@@ -88,33 +101,44 @@ export default function Dashboard() {
   const statusLabel: Record<StageStatus, string> = { pending: t('statusPending'), ongoing: t('statusOngoing'), done: t('statusDone') }
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <div className="text-sm text-ink-2">{t('spent')}</div>
-        <div className="text-[2.5rem] leading-none font-semibold tracking-tight mt-1">{fmtINR(s.spent)}</div>
-        <div className="text-sm text-ink-2 mt-2">
-          {t('ofBudget')} {fmtINR(budget)} · {Math.round(pct * 100)}%
-        </div>
-        <Meter value={s.spent} max={budget} className="mt-3" />
-        <div className="grid grid-cols-2 gap-3 mt-4">
-          <div className="rounded-xl bg-surface-2 p-3 min-w-0">
-            <div className="text-xs text-ink-2">{balance >= 0 ? t('balance') : t('overBudget')}</div>
-            <div className={`text-lg font-semibold tabular-nums truncate ${balance < 0 ? 'text-critical' : ''}`}>{fmtINR(Math.abs(balance))}</div>
+    <div className="space-y-4 stagger">
+      <section className="hero-gradient text-white rounded-3xl p-5 shadow-lg shadow-accent/25">
+        <div className="flex items-center justify-between">
+          <div className="text-sm/5 opacity-90">{t('spent')}</div>
+          <div className="h-9 w-9 rounded-full bg-white/20 grid place-items-center">
+            <Wallet size={18} />
           </div>
-          <div className="rounded-xl bg-surface-2 p-3 min-w-0">
-            <div className="text-xs text-ink-2">{t('pending')}</div>
-            <div className="text-lg font-semibold tabular-nums truncate">{fmtINR(s.pending)}</div>
-            <div className="text-xs text-muted mt-0.5 truncate">
+        </div>
+        <div className="text-[2.6rem] leading-none font-bold tracking-tight mt-2 tabular-nums">
+          <CountUp value={s.spent} format={fmtINR} />
+        </div>
+        <div className="text-sm opacity-90 mt-2">
+          {t('ofBudget')} {fmtINR(budget)} · <span className="font-semibold">{Math.round(pct * 100)}%</span>
+        </div>
+        <Meter value={s.spent} max={budget} className="mt-3" onDark />
+        <div className="grid grid-cols-2 gap-3 mt-4">
+          <div className="rounded-2xl bg-white/15 p-3 min-w-0 backdrop-blur-sm">
+            <div className="text-xs opacity-90">{balance >= 0 ? t('balance') : t('overBudget')}</div>
+            <div className="text-lg font-semibold tabular-nums truncate">
+              <CountUp value={Math.abs(balance)} format={fmtINR} />
+            </div>
+          </div>
+          <div className="rounded-2xl bg-white/15 p-3 min-w-0 backdrop-blur-sm">
+            <div className="text-xs opacity-90">{t('pending')}</div>
+            <div className="text-lg font-semibold tabular-nums truncate">
+              <CountUp value={s.pending} format={fmtINR} />
+            </div>
+            <div className="text-[11px] opacity-80 mt-0.5 truncate">
               {t('toShops')} {fmtCompact(s.expensePending)} · {t('toWorkers')} {fmtCompact(Math.max(0, s.workerPending))}
             </div>
           </div>
         </div>
-      </Card>
+      </section>
 
       <div className="grid grid-cols-3 gap-3">
-        <StatTile label={t('material')} value={fmtCompact(s.material)} />
-        <StatTile label={t('labour')} value={fmtCompact(s.labour)} />
-        <StatTile label={t('others')} value={fmtCompact(s.other)} />
+        <StatTile label={t('material')} value={fmtCompact(s.material)} slot={1} icon={<Package size={16} />} />
+        <StatTile label={t('labour')} value={fmtCompact(s.labour)} slot={2} icon={<HardHat size={16} />} />
+        <StatTile label={t('others')} value={fmtCompact(s.other)} slot={6} icon={<Receipt size={16} />} />
       </div>
 
       <Card>
@@ -134,20 +158,33 @@ export default function Dashboard() {
       </Card>
 
       <Card>
-        <SectionTitle>{t('byStage')}</SectionTitle>
+        <div className="flex items-center justify-between mb-3">
+          <SectionTitle className="mb-0">{t('byStage')}</SectionTitle>
+          <span className="text-xs text-ink-2">
+            {doneCount}/{d.stages.length} {t('statusDone')}
+          </span>
+        </div>
+        {/* progress strip: one segment per stage, coloured by status */}
+        <div className="flex gap-1 mb-3">
+          {d.stages.map((st) => (
+            <span key={st.id} className="h-1.5 grow rounded-full" style={{ background: st.status === 'pending' ? 'var(--surface-2)' : statusDot[st.status] }} title={localName(st, lang)} />
+          ))}
+        </div>
         {stageItems.length === 0 && untagged === 0 ? (
           <Empty>{t('noData')}</Empty>
         ) : (
           <ul className="divide-y divide-line -mx-4">
             {stageItems.map(({ st, cost }) => (
               <li key={st.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: statusDot[st.status] }} />
                 <span className="grow truncate">{localName(st, lang)}</span>
-                <Badge tone={st.status === 'ongoing' ? 'warning' : st.status === 'done' ? 'good' : 'neutral'}>{statusLabel[st.status]}</Badge>
+                <Badge tone={statusTone[st.status]}>{statusLabel[st.status]}</Badge>
                 <span className="tabular-nums text-ink-2 shrink-0 w-24 text-right">{fmtINR(cost)}</span>
               </li>
             ))}
             {untagged > 0 && (
               <li className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2">
+                <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-surface-2" />
                 <span className="grow">{t('others')}</span>
                 <span className="tabular-nums shrink-0 w-24 text-right">{fmtINR(untagged)}</span>
               </li>
@@ -161,8 +198,9 @@ export default function Dashboard() {
         {memberItems.length ? (
           <ul className="divide-y divide-line -mx-4">
             {memberItems.map((m) => (
-              <li key={m.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <span className="truncate">{m.name}</span>
+              <li key={m.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                <Avatar name={m.name} size="sm" />
+                <span className="grow truncate font-medium">{m.name}</span>
                 <span className="tabular-nums text-ink-2">{fmtINR(m.value)}</span>
               </li>
             ))}
@@ -184,13 +222,24 @@ export default function Dashboard() {
           <ul className="divide-y divide-line -mx-4">
             {recent.map((r) => (
               <li key={r.id}>
-                <button type="button" onClick={r.onClick} className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-surface-2">
-                  <span className="text-xs text-muted w-12 shrink-0">{fmtDateShort(r.date)}</span>
+                <button type="button" onClick={r.onClick} className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-surface-2 transition-colors">
+                  {r.kind === 'worker' ? (
+                    <Avatar name={r.name} size="sm" />
+                  ) : (
+                    <IconChip slot={r.slot} size="sm">
+                      <Receipt size={15} />
+                    </IconChip>
+                  )}
                   <span className="grow min-w-0">
-                    <span className="block truncate">{r.title}</span>
-                    {r.sub && <span className="block text-xs text-ink-2 truncate">{r.sub}</span>}
+                    <span className="block truncate font-medium">{r.title}</span>
+                    <span className="block text-xs text-ink-2 truncate">
+                      {fmtDateShort(r.date)}
+                      {r.sub && ` · ${r.sub}`}
+                    </span>
                   </span>
-                  <span className="tabular-nums font-medium shrink-0">{fmtINR(r.amount)}</span>
+                  <span className="tabular-nums font-semibold shrink-0" style={{ color: seriesColor(r.slot) }}>
+                    {fmtINR(r.amount)}
+                  </span>
                 </button>
               </li>
             ))}

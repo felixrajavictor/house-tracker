@@ -5,7 +5,8 @@ import { useData } from '../lib/data'
 import { useUi } from '../lib/uiContext'
 import { fmtDate, fmtINR, monthKey, todayISO } from '../lib/format'
 import type { CategoryKind, Expense } from '../lib/types'
-import { Badge, Card, Chip, Empty, Input, Select } from '../components/ui'
+import { Badge, Card, Chip, Empty, IconChip, Input, Select } from '../components/ui'
+import { categorySlot } from '../lib/colors'
 
 const kindIcon: Record<CategoryKind, typeof Package> = { material: Package, labour: HardHat, service: Truck, other: Receipt }
 
@@ -73,11 +74,11 @@ export default function Expenses() {
 
       {groups.length === 0 && <Empty>{d.expenses.length === 0 ? t('noExpenses') : t('noData')}</Empty>}
 
-      {groups.map(([date, items]) => (
-        <div key={date}>
-          <div className="text-xs font-medium text-muted px-1 mb-1.5 mt-2">{fmtDate(date)}</div>
+      {groups.map((group) => (
+        <div key={group[0]} className="animate-fade-up">
+          <div className="text-xs font-medium text-muted px-1 mb-1.5 mt-2">{fmtDate(group[0])}</div>
           <Card className="p-0 divide-y divide-line overflow-hidden">
-            {items.map((e) => (
+            {group[1].map((e) => (
               <ExpenseRow key={e.id} e={e} />
             ))}
           </Card>
@@ -100,10 +101,10 @@ function ExpenseRow({ e }: { e: Expense }) {
   const sub = [c && e.description ? localName(c, lang) : null, sup?.name, modeLabel, payer?.name].filter(Boolean).join(' · ')
 
   return (
-    <button type="button" onClick={() => openExpense(e)} className="w-full flex items-center gap-3 p-3 text-left hover:bg-surface-2">
-      <div className="h-10 w-10 rounded-xl bg-surface-2 grid place-items-center text-ink-2 shrink-0">
+    <button type="button" onClick={() => openExpense(e)} className="w-full flex items-center gap-3 p-3 text-left hover:bg-surface-2 transition-colors">
+      <IconChip slot={categorySlot(c)}>
         <Icon size={18} />
-      </div>
+      </IconChip>
       <div className="grow min-w-0">
         <div className="font-medium truncate">{e.description || (c ? localName(c, lang) : t('others'))}</div>
         <div className="text-xs text-ink-2 truncate">{sub}</div>

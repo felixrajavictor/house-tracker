@@ -1,38 +1,53 @@
 import { useState } from 'react'
 import { fmtCompact, fmtINR } from '../lib/format'
+import { seriesColor } from '../lib/colors'
 import { cn } from './ui'
 
-/** Budget meter: fill tone follows severity, the track is a lighter step of the same tone. */
-export function Meter({ value, max, className }: { value: number; max: number; className?: string }) {
+/** Budget meter: fill tone follows severity. `onDark` renders a white fill for use on the gradient hero. */
+export function Meter({ value, max, className, onDark }: { value: number; max: number; className?: string; onDark?: boolean }) {
   const pct = max > 0 ? value / max : 0
-  const tone = pct >= 1 ? 'var(--critical)' : pct >= 0.85 ? 'var(--warning)' : 'var(--accent)'
+  const tone = pct >= 1 ? 'var(--critical)' : pct >= 0.85 ? 'var(--warning)' : onDark ? '#ffffff' : 'var(--accent)'
+  const track = onDark ? 'rgba(255,255,255,0.25)' : `color-mix(in oklab, ${tone} 20%, var(--surface))`
   return (
     <div
       className={cn('h-2.5 rounded-full overflow-hidden', className)}
-      style={{ background: `color-mix(in oklab, ${tone} 20%, var(--surface))` }}
+      style={{ background: track }}
       role="meter"
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(Math.min(100, pct * 100))}
     >
-      <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${Math.min(100, pct * 100)}%`, background: tone }} />
+      <div className="h-full rounded-full origin-left animate-grow-x" style={{ width: `${Math.min(100, pct * 100)}%`, background: tone }} />
     </div>
   )
 }
 
-/** Horizontal bar list — one hue, the label beside each bar carries identity. */
-export function BarList({ items }: { items: { label: string; value: number }[] }) {
+export interface BarItem {
+  label: string
+  value: number
+  /** categorical colour slot 1–8; defaults to series 1 */
+  slot?: number
+}
+
+/** Horizontal bar list — each row carries its own colour, the label beside it carries identity. */
+export function BarList({ items }: { items: BarItem[] }) {
   const max = Math.max(1, ...items.map((i) => i.value))
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-3 stagger">
       {items.map((i) => (
         <li key={i.label}>
           <div className="flex justify-between gap-3 text-sm mb-1">
-            <span className="truncate">{i.label}</span>
+            <span className="inline-flex items-center gap-2 truncate">
+              <i className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: seriesColor(i.slot ?? 1) }} />
+              <span className="truncate">{i.label}</span>
+            </span>
             <span className="text-ink-2 tabular-nums shrink-0">{fmtINR(i.value)}</span>
           </div>
-          <div className="h-2 rounded-[4px] bg-surface-2">
-            <div className="h-full rounded-r-[4px]" style={{ width: `${Math.max(1, (i.value / max) * 100)}%`, background: 'var(--series-1)' }} />
+          <div className="h-2.5 rounded-[4px] bg-surface-2 overflow-hidden">
+            <div
+              className="h-full rounded-r-[4px] origin-left animate-grow-x"
+              style={{ width: `${Math.max(1.5, (i.value / max) * 100)}%`, background: seriesColor(i.slot ?? 1) }}
+            />
           </div>
         </li>
       ))}
@@ -106,12 +121,14 @@ export function MonthlyColumns({ data, series }: { data: ColumnDatum[]; series: 
           return (
             <g key={d.key} onClick={() => setActive(i)} onMouseEnter={() => setActive(i)} className="cursor-pointer">
               <rect x={padL + i * slot} y={padT - 10} width={slot} height={plotH + padB + 10} fill="transparent" />
-              {segs.map((s, si) => {
-                if (s.h <= 0) return null
-                // upper segments give up 2px at their base so a surface-coloured gap separates the stack
-                const hh = si === 0 ? s.h : Math.max(0, s.h - gap)
-                return <path key={si} d={topRounded(x, s.top, barW, hh, si === lastIdx ? 4 : 0)} fill={series[si]?.color} opacity={isActive ? 1 : 0.8} />
-              })}
+              <g style={{ transformOrigin: `${x + barW / 2}px ${padT + plotH}px`, animation: `grow-y 0.7s cubic-bezier(0.2,0.8,0.2,1) ${i * 0.06}s both` }}>
+                {segs.map((s, si) => {
+                  if (s.h <= 0) return null
+                  // upper segments give up 2px at their base so a surface-coloured gap separates the stack
+                  const hh = si === 0 ? s.h : Math.max(0, s.h - gap)
+                  return <path key={si} d={topRounded(x, s.top, barW, hh, si === lastIdx ? 4 : 0)} fill={series[si]?.color} opacity={isActive ? 1 : 0.75} style={{ transition: 'opacity .2s' }} />
+                })}
+              </g>
               {isActive && totals[i] > 0 && lastIdx >= 0 && (
                 <text x={x + barW / 2} y={segs[lastIdx].top - 5} textAnchor="middle" fontSize={10} fontWeight={600} fill="var(--ink)">
                   {fmtCompact(totals[i])}
@@ -123,6 +140,7 @@ export function MonthlyColumns({ data, series }: { data: ColumnDatum[]; series: 
             </g>
           )
         })}
+        <style>{`@keyframes grow-y { from { transform: scaleY(0) } to { transform: scaleY(1) } }`}</style>
       </svg>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-2 mt-1">
         {series.map((s) => (

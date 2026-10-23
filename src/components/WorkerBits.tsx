@@ -9,16 +9,7 @@ import { errMsg, fmtINR } from '../lib/format'
 import type { CashMode, Worker } from '../lib/types'
 import { Badge, Button, Field, Group, Input, Segmented, Select, Sheet, Textarea } from './ui'
 
-export function Avatar({ name, size = 'md' }: { name: string; size?: 'md' | 'lg' }) {
-  return (
-    <div
-      className={`${size === 'lg' ? 'h-14 w-14 text-xl' : 'h-10 w-10'} rounded-full bg-accent-soft grid place-items-center font-semibold shrink-0`}
-      aria-hidden
-    >
-      {name.trim()[0]?.toUpperCase()}
-    </div>
-  )
-}
+export { Avatar } from './ui'
 
 /** Worker balance pill: positive = we owe them, negative = advance outstanding. */
 export function BalanceBadge({ balance }: { balance: number }) {
