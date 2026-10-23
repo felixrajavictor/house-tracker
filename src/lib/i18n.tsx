@@ -120,6 +120,10 @@ const en = {
   half: 'Half day',
   full: 'Full day',
   stageForDay: 'Stage of work',
+  paymentsForDay: 'Paid on this day',
+  deletePayment: 'Delete payment',
+  deletePaymentHint: 'Paid by mistake? Delete it here and the balance corrects itself.',
+  attendanceHint: 'Marked wrongly? Tap "Absent" to remove the day.',
 
   // more
   editor: 'Can add & edit',
@@ -295,6 +299,10 @@ const ta: Record<TKey, string> = {
   half: 'அரை நாள்',
   full: 'முழு நாள்',
   stageForDay: 'என்ன வேலை (கட்டம்)',
+  paymentsForDay: 'இந்த நாள் கொடுத்தது',
+  deletePayment: 'பணப் பதிவை நீக்கு',
+  deletePaymentHint: 'தவறாக கொடுத்தாச்சு-னு போட்டீங்களா? இங்கே நீக்கினால் கணக்கு தானாக சரியாகும்.',
+  attendanceHint: 'தவறாக போட்டீங்களா? "வரலை" தட்டினால் அந்த நாள் நீங்கும்.',
 
   editor: 'சேர்க்க & திருத்த முடியும்',
   viewer: 'பார்க்க மட்டும்',

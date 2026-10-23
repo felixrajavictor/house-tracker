@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Check, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import { addDays, format, parseISO } from 'date-fns'
 import { localName, useT } from '../lib/i18n'
 import { useAuth } from '../lib/auth'
@@ -8,9 +8,54 @@ import { useData } from '../lib/data'
 import { supabase } from '../lib/supabase'
 import { computeStats } from '../lib/stats'
 import { errMsg, fmtINR, todayISO } from '../lib/format'
-import type { Worker } from '../lib/types'
-import { Button, Card, Empty, Field, Segmented, Select } from '../components/ui'
+import type { Worker, WorkerPayment } from '../lib/types'
+import { Button, Card, Empty, Field, Segmented, Select, Sheet } from '../components/ui'
 import { Avatar, BalanceBadge, PaySheet } from '../components/WorkerBits'
+
+/** The payments made to one worker on one day, each deletable — so a wrong "Pay" tap can be undone right here. */
+function DayPaymentsSheet({ worker, payments, onClose }: { worker: Worker; payments: WorkerPayment[]; onClose: () => void }) {
+  const { t } = useT()
+  const d = useData()
+  const { isEditor } = useAuth()
+  const [busy, setBusy] = useState<string | null>(null)
+
+  async function del(p: WorkerPayment) {
+    if (!confirm(t('confirmDelete'))) return
+    setBusy(p.id)
+    await supabase.from('worker_payments').delete().eq('id', p.id)
+    await d.refresh()
+    setBusy(null)
+    if (payments.length <= 1) onClose()
+  }
+
+  return (
+    <Sheet title={`${t('paymentsForDay')} · ${worker.name}`} onClose={onClose}>
+      {payments.length === 0 ? (
+        <Empty>{t('noHistory')}</Empty>
+      ) : (
+        <ul className="rounded-xl border border-line divide-y divide-line">
+          {payments.map((p) => (
+            <li key={p.id} className="flex items-center gap-3 p-3 text-sm">
+              <div className="grow min-w-0">
+                <div className="font-medium">
+                  {fmtINR(p.amount)} · {p.kind === 'advance' ? t('advance') : t('wage')}
+                </div>
+                <div className="text-xs text-ink-2 truncate">{[t(p.payment_mode), p.paid_by ? d.profileById.get(p.paid_by)?.name : null, p.notes].filter(Boolean).join(' · ')}</div>
+              </div>
+              {isEditor && (
+                <Button variant="danger" size="sm" onClick={() => del(p)} disabled={busy === p.id} aria-label={t('deletePayment')}>
+                  <Trash2 size={16} />
+                  {t('delete')}
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {isEditor && <p className="text-xs text-muted">{t('deletePaymentHint')}</p>}
+    </Sheet>
+  )
+}
 
 export default function Attendance() {
   const { t, lang } = useT()
@@ -21,6 +66,7 @@ export default function Attendance() {
   const [date, setDate] = useState(today)
   const [stageId, setStageId] = useState<number>(() => d.stages.find((s) => s.status === 'ongoing')?.id ?? 0)
   const [paying, setPaying] = useState<{ worker: Worker; amount: number } | null>(null)
+  const [viewPaid, setViewPaid] = useState<Worker | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
@@ -152,10 +198,16 @@ export default function Attendance() {
                         </Button>
                       )
                     ) : (
-                      <span className="text-xs font-medium text-good-text inline-flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setViewPaid(w)}
+                        className="text-xs font-medium text-good-text inline-flex items-center gap-1 shrink-0 rounded-full px-2 py-1 hover:bg-surface-2"
+                        style={{ background: 'color-mix(in oklab, var(--good) 14%, var(--surface))' }}
+                      >
                         <Check size={14} />
                         {t('paid')} {fmtINR(paid)}
-                      </span>
+                        <ChevronRight size={14} className="opacity-60" />
+                      </button>
                     ))}
                 </div>
                 <Segmented
@@ -177,6 +229,7 @@ export default function Attendance() {
       )}
 
       {err && <p className="text-sm text-critical">{err}</p>}
+      {isEditor && workers.length > 0 && <p className="text-xs text-muted px-1">{t('attendanceHint')}</p>}
 
       <Card className="flex items-center justify-between gap-3">
         <div className="min-w-0">
@@ -194,6 +247,13 @@ export default function Attendance() {
       </Card>
 
       {paying && <PaySheet worker={paying.worker} kind="wage" defaultAmount={paying.amount} date={date} onClose={() => setPaying(null)} />}
+      {viewPaid && (
+        <DayPaymentsSheet
+          worker={viewPaid}
+          payments={d.payments.filter((p) => p.worker_id === viewPaid.id && p.date === date)}
+          onClose={() => setViewPaid(null)}
+        />
+      )}
     </div>
   )
 }
