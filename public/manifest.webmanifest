@@ -1,0 +1,10 @@
+{
+  "name": "House Tracker · வீடு கணக்கு",
+  "short_name": "வீடு கணக்கு",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f4f1",
+  "theme_color": "#2a78d6",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
